@@ -27,6 +27,7 @@ import org.scalasteward.core.git
 import org.scalasteward.core.git.Branch
 import org.scalasteward.core.repoconfig.RepoConfigAlg
 import org.scalasteward.core.util.{Details, Nel}
+import org.scalasteward.core.vulnerabilities.Vulnerability
 
 final case class NewPullRequestData(
     title: String,
@@ -46,7 +47,8 @@ object NewPullRequestData {
       artifactIdToUrl: Map[String, Uri],
       releaseRelatedUrls: List[ReleaseRelatedUrl],
       filesWithOldVersion: List[String],
-      configParsingError: Option[String]
+      configParsingError: Option[String],
+      vulnerabilities: List[Vulnerability]
   ): String = {
     val artifacts = artifactsWithOptionalUrl(update, artifactIdToUrl)
     val migrations = edits.collect { case scalafixEdit: ScalafixEdit => scalafixEdit }
@@ -56,7 +58,8 @@ object NewPullRequestData {
       appliedMigrations,
       oldVersionDetails,
       ignoreFutureUpdates(update).some,
-      configParsingError.map(configParsingErrorDetails)
+      configParsingError.map(configParsingErrorDetails),
+      vulnerabilitiesDetails(vulnerabilities)
     ).flatten
 
     s"""|Updates $artifacts ${fromTo(update)}.
@@ -170,13 +173,23 @@ object NewPullRequestData {
       Details("Applied Scalafix Migrations", body)
     }
 
+  def vulnerabilitiesDetails(vulnerabilities: List[Vulnerability]): Option[Details] =
+    Option.when(vulnerabilities.nonEmpty) {
+      val body = vulnerabilities.map { vulnerability =>
+        s"* [${vulnerability.id}](${vulnerability.permalink})"
+      }.mkString("\n")
+      Details(s"${vulnerabilities.size} vulnerabilities", body)
+    }
+
+
   def from(
       data: UpdateData,
       branchName: String,
       edits: List[EditAttempt] = List.empty,
       artifactIdToUrl: Map[String, Uri] = Map.empty,
       releaseRelatedUrls: List[ReleaseRelatedUrl] = List.empty,
-      filesWithOldVersion: List[String] = List.empty
+      filesWithOldVersion: List[String] = List.empty,
+      vulnerabilities: List[Vulnerability] = List.empty
   ): NewPullRequestData =
     NewPullRequestData(
       title = git
@@ -188,7 +201,8 @@ object NewPullRequestData {
         artifactIdToUrl,
         releaseRelatedUrls,
         filesWithOldVersion,
-        data.repoData.cache.maybeRepoConfigParsingError
+        data.repoData.cache.maybeRepoConfigParsingError,
+        vulnerabilities
       ),
       head = branchName,
       base = data.baseBranch

@@ -44,7 +44,8 @@ import org.scalasteward.core.util._
 import org.scalasteward.core.util.uri._
 import org.scalasteward.core.vcs.data.Repo
 import org.scalasteward.core.vcs.github.{GitHubAppApiAlg, GitHubAuthAlg}
-import org.scalasteward.core.vcs.{VCSApiAlg, VCSExtraAlg, VCSRepoAlg, VCSSelection}
+import org.scalasteward.core.vcs.{VCSApiAlg, VCSExtraAlg, VCSRepoAlg, VCSSelection, github}
+import org.scalasteward.core.vulnerabilities.GitHubVulnerabilitiesApiAlg
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
@@ -170,6 +171,8 @@ object Context {
         new RefreshErrorAlg[F](refreshErrorStore, config.refreshBackoffPeriod)
       implicit val repoCacheAlg: RepoCacheAlg[F] = new RepoCacheAlg[F](config)
       implicit val editAlg: EditAlg[F] = new EditAlg[F]
+      implicit val gitHubVulnerabilitiesApiAlg: GitHubVulnerabilitiesApiAlg[F] =
+        new GitHubVulnerabilitiesApiAlg[F](config.vcsCfg.apiHost, _ => github.authentication.addCredentials(vcsUser))
       implicit val nurtureAlg: NurtureAlg[F] = new NurtureAlg[F](config.vcsCfg)
       implicit val pruningAlg: PruningAlg[F] = new PruningAlg[F]
       implicit val gitHubAppApiAlg: GitHubAppApiAlg[F] =

@@ -26,24 +26,26 @@ import org.scalasteward.core.data._
 import org.scalasteward.core.edit.{EditAlg, EditAttempt}
 import org.scalasteward.core.git.{Branch, Commit, GitAlg}
 import org.scalasteward.core.repoconfig.PullRequestUpdateStrategy
-import org.scalasteward.core.util.{Nel, UrlChecker}
 import org.scalasteward.core.util.logger.LoggerOps
+import org.scalasteward.core.util.{Nel, UrlChecker}
 import org.scalasteward.core.vcs.data._
 import org.scalasteward.core.vcs.{VCSApiAlg, VCSExtraAlg, VCSRepoAlg}
+import org.scalasteward.core.vulnerabilities.VulnerabilitiesApiAlg
 import org.scalasteward.core.{git, util, vcs}
 import org.typelevel.log4cats.Logger
 
 final class NurtureAlg[F[_]](config: VCSCfg)(implicit
-    coursierAlg: CoursierAlg[F],
-    editAlg: EditAlg[F],
-    gitAlg: GitAlg[F],
-    logger: Logger[F],
-    pullRequestRepository: PullRequestRepository[F],
-    vcsApiAlg: VCSApiAlg[F],
-    vcsExtraAlg: VCSExtraAlg[F],
-    vcsRepoAlg: VCSRepoAlg[F],
-    urlChecker: UrlChecker[F],
-    F: Concurrent[F]
+                                             coursierAlg: CoursierAlg[F],
+                                             editAlg: EditAlg[F],
+                                             gitAlg: GitAlg[F],
+                                             logger: Logger[F],
+                                             pullRequestRepository: PullRequestRepository[F],
+                                             vcsApiAlg: VCSApiAlg[F],
+                                             vcsExtraAlg: VCSExtraAlg[F],
+                                             vcsRepoAlg: VCSRepoAlg[F],
+                                             urlChecker: UrlChecker[F],
+                                             vulnerabilitiesApiAlg: VulnerabilitiesApiAlg[F],
+                                             F: Concurrent[F]
 ) {
   def nurture(data: RepoData, fork: RepoOut, updates: Nel[Update.Single]): F[Unit] =
     for {
@@ -186,6 +188,7 @@ final class NurtureAlg[F[_]](config: VCSCfg)(implicit
           .get(data.update.mainArtifactId)
           .traverse(vcsExtraAlg.getReleaseRelatedUrls(_, data.update))
       filesWithOldVersion <- gitAlg.findFilesContaining(data.repo, data.update.currentVersion)
+      vulnerabilities <- vulnerabilitiesApiAlg.vulnerabilities(data.update)
       branchName = vcs.createBranch(config.tpe, data.fork, data.updateBranch)
       requestData = NewPullRequestData.from(
         data,
@@ -193,7 +196,8 @@ final class NurtureAlg[F[_]](config: VCSCfg)(implicit
         edits,
         existingArtifactUrlsMap,
         releaseRelatedUrls.getOrElse(List.empty),
-        filesWithOldVersion
+        filesWithOldVersion,
+        vulnerabilities
       )
       pr <- vcsApiAlg.createPullRequest(data.repo, requestData)
       prData = PullRequestData[Id](
